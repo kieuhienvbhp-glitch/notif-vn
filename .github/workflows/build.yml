@@ -78,7 +78,7 @@ jobs:
           else
             BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
             SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-            VERSION="v2.1.0-${BRANCH}-${SHA}"
+            VERSION="v2.1.1-${BRANCH}-${SHA}"
           fi
 
           APK_DEST="AutoBankPay-Pro-${VERSION}.apk"
@@ -97,7 +97,7 @@ jobs:
         if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.1.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v2.1.1' }}
           name: AutoBankPay Pro ${{ env.VERSION }}
           body: |
             ## ⚡ AutoBankPay Pro - Tự Động Duyệt Đơn Hàng Ngân Hàng ${{ env.VERSION }}
@@ -108,7 +108,7 @@ jobs:
             - **Tên app:** AutoBankPay Pro
             - **APK đã được ký số chính thức** (không bị Google Play Protect chặn)
             - **Hỗ trợ tối ưu:** Android 8.0 đến Android 16 (API 36)
-            - **Tính năng mới v2.1:** Quét mã QR cấu hình tự động, thử nghiệm gửi webhook mô phỏng ngân hàng, chọn app lọc thông báo trực quan.
+            - **Tính năng mới v2.1.1:** Cập nhật quyền chạy ngầm, chọn ứng dụng, sửa lỗi hiển thị, cải tiến gọi hộp thoại quyền ứng dụng trực tiếp.
           files: ${{ env.APK_PATH }}
           draft: false
           prerelease: false

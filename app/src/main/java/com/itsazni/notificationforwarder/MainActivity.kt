@@ -409,15 +409,15 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                        onClick = { openNotificationSettings(context) }
                     ) {
-                        Text("Mở cài đặt quyền thông báo")
+                        Text("Cấp quyền xem thông báo")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { openBatterySettings(context) }
                     ) {
-                        Text("Mở cài đặt tối ưu pin")
+                        Text("Cấp quyền chạy ngầm")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
@@ -1160,6 +1160,19 @@ private fun buildHeadersPreview(
         }
     }
     return headers
+}
+
+private fun openNotificationSettings(context: Context) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+        val componentName = ComponentName(context, com.itsazni.notificationforwarder.service.AppNotificationListenerService::class.java)
+        intent.putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, componentName.flattenToString())
+        runCatching { context.startActivity(intent) }.onFailure {
+            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+    } else {
+        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
 }
 
 private fun openBatterySettings(context: Context) {
