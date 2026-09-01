@@ -169,7 +169,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
     val recent by repository.observeRecent(30).collectAsState(initial = emptyList())
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Chuyển Tiếp Thông Báo") }) },
+        topBar = { TopAppBar(title = { Text("AutoBankPay Pro") }) },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             NavigationBar(
