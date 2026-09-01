@@ -75,10 +75,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class AppTab(val label: String, val icon: ImageVector) {
-    HOME("Home", Icons.Filled.Home),
+    HOME("Trang chủ", Icons.Filled.Home),
     WEBHOOK("Webhook", Icons.Filled.Link),
-    FILTER("Filter", Icons.Filled.Tune),
-    QUEUE("Queue", Icons.AutoMirrored.Filled.List)
+    FILTER("Bộ lọc", Icons.Filled.Tune),
+    QUEUE("Hàng đợi", Icons.AutoMirrored.Filled.List)
+}
+
+private fun FilterMode.toDisplayLabel(): String = when (this) {
+    FilterMode.ALL_APPS -> "Tất cả ứng dụng (ALL_APPS)"
+    FilterMode.WHITELIST -> "Danh sách cho phép (WHITELIST)"
+    FilterMode.BLACKLIST -> "Danh sách chặn (BLACKLIST)"
+}
+
+private fun AuthMode.toDisplayLabel(): String = when (this) {
+    AuthMode.NONE -> "Không xác thực (NONE)"
+    AuthMode.BEARER -> "Bearer Token"
+    AuthMode.CUSTOM -> "Headers tùy chỉnh (CUSTOM)"
+}
+
+private fun QueueStatus.toDisplayLabel(): String = when (this) {
+    QueueStatus.PENDING -> "Chờ gửi"
+    QueueStatus.SENDING -> "Đang gửi"
+    QueueStatus.SENT -> "Đã gửi"
+    QueueStatus.FAILED -> "Thất bại"
 }
 
 private data class UiSettings(
@@ -143,7 +162,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
     val recent by repository.observeRecent(30).collectAsState(initial = emptyList())
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Notification Forwarder") }) },
+        topBar = { TopAppBar(title = { Text("Chuyển Tiếp Thông Báo") }) },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             NavigationBar(
@@ -178,7 +197,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                 onSave = {
                     saveSettings(settingsStore, uiSettings)
                     WorkerScheduler.enqueueImmediate(context)
-                    scope.launch { snackbarHostState.showSnackbar("Webhook settings saved") }
+                    scope.launch { snackbarHostState.showSnackbar("Đã lưu cài đặt Webhook") }
                 },
                 onTestWebhook = {
                     scope.launch {
@@ -195,9 +214,9 @@ private fun MainScreen(settingsStore: SettingsStore) {
                                 payloadTemplate = uiSettings.payloadTemplateRaw,
                                 item = QueueItem(
                                     packageName = "com.test.package",
-                                    appName = "Webhook Test",
-                                    title = "Test Notification",
-                                    text = "This is a test payload",
+                                    appName = "Thử nghiệm Webhook",
+                                    title = "Thông báo thử nghiệm",
+                                    text = "Đây là nội dung thử nghiệm gửi webhook",
                                     postedAt = System.currentTimeMillis(),
                                     notificationKey = "test-${System.currentTimeMillis()}"
                                 ),
@@ -205,7 +224,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                             )
                         }
                         snackbarHostState.showSnackbar(
-                            if (result.success) "Webhook test success" else "Webhook test failed: ${result.message}"
+                            if (result.success) "Gửi thử Webhook thành công!" else "Gửi thử Webhook thất bại: ${result.message}"
                         )
                     }
                 }
@@ -219,7 +238,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                 onSettingsChange = { uiSettings = it },
                 onSave = {
                     saveSettings(settingsStore, uiSettings)
-                    scope.launch { snackbarHostState.showSnackbar("Filter & retry settings saved") }
+                    scope.launch { snackbarHostState.showSnackbar("Đã lưu cài đặt bộ lọc & thử lại") }
                 }
             )
 
@@ -231,13 +250,13 @@ private fun MainScreen(settingsStore: SettingsStore) {
                 onDeleteItem = { itemId ->
                     scope.launch {
                         repository.deleteQueueItem(itemId)
-                        snackbarHostState.showSnackbar("Queue item deleted")
+                        snackbarHostState.showSnackbar("Đã xóa mục trong hàng đợi")
                     }
                 },
                 onClearQueue = {
                     scope.launch {
                         repository.clearQueue()
-                        snackbarHostState.showSnackbar("Queue cleared")
+                        snackbarHostState.showSnackbar("Đã xóa sạch hàng đợi")
                     }
                 }
             )
@@ -262,15 +281,15 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Service Status", fontWeight = FontWeight.SemiBold)
+                    Text("Trạng thái dịch vụ", fontWeight = FontWeight.SemiBold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Notification Access")
+                        Text("Quyền đọc thông báo")
                         val enabled = isNotificationListenerEnabled(context)
                         StatusBadge(
-                            text = if (enabled) "Granted" else "Not granted",
+                            text = if (enabled) "Đã cấp quyền" else "Chưa cấp quyền",
                             success = enabled
                         )
                     }
@@ -278,10 +297,10 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Battery Optimization")
+                        Text("Tối ưu hóa pin")
                         val unrestricted = isBatteryUnrestricted(context)
                         StatusBadge(
-                            text = if (unrestricted) "No restriction" else "Restricted",
+                            text = if (unrestricted) "Không hạn chế" else "Bị hạn chế",
                             success = unrestricted
                         )
                     }
@@ -289,19 +308,19 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
                     ) {
-                        Text("Open Access Settings")
+                        Text("Mở cài đặt quyền thông báo")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { openBatterySettings(context) }
                     ) {
-                        Text("Open Battery Settings")
+                        Text("Mở cài đặt tối ưu pin")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { WorkerScheduler.enqueueImmediate(context) }
                     ) {
-                        Text("Sync Queue")
+                        Text("Đồng bộ hàng đợi ngay")
                     }
                 }
             }
@@ -314,18 +333,18 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Queue Summary", fontWeight = FontWeight.SemiBold)
+                    Text("Thống kê hàng đợi", fontWeight = FontWeight.SemiBold)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QueueStatCard(
                             modifier = Modifier.weight(1f),
-                            label = "Pending",
+                            label = "Chờ gửi",
                             value = stats.pendingCount.toString(),
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         QueueStatCard(
                             modifier = Modifier.weight(1f),
-                            label = "Sending",
+                            label = "Đang gửi",
                             value = stats.sendingCount.toString(),
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
@@ -334,14 +353,14 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QueueStatCard(
                             modifier = Modifier.weight(1f),
-                            label = "Sent",
+                            label = "Đã gửi",
                             value = stats.sentCount.toString(),
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         QueueStatCard(
                             modifier = Modifier.weight(1f),
-                            label = "Failed",
+                            label = "Thất bại",
                             value = stats.failedCount.toString(),
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -371,12 +390,12 @@ private fun WebhookScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Webhook Settings", fontWeight = FontWeight.SemiBold)
+                    Text("Cài đặt Webhook", fontWeight = FontWeight.SemiBold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Enable forwarding")
+                        Text("Bật chuyển tiếp thông báo")
                         Switch(
                             checked = uiSettings.forwardingEnabled,
                             onCheckedChange = { onSettingsChange(uiSettings.copy(forwardingEnabled = it)) }
@@ -387,25 +406,27 @@ private fun WebhookScreen(
                         modifier = Modifier.fillMaxWidth(),
                         value = uiSettings.webhookUrl,
                         onValueChange = { onSettingsChange(uiSettings.copy(webhookUrl = it)) },
-                        label = { Text("Webhook URL") },
+                        label = { Text("URL Webhook (vd: http://192.168.1.10:3000/webhook)") },
                         singleLine = true
                     )
 
                     DropdownSelector(
-                        label = "HTTP method",
-                        value = uiSettings.webhookMethod,
+                        label = "Phương thức HTTP",
+                        selectedValue = uiSettings.webhookMethod,
                         options = listOf("GET", "POST", "PUT", "PATCH"),
+                        itemLabel = { it },
                         onSelected = {
                             onSettingsChange(uiSettings.copy(webhookMethod = it))
                         }
                     )
 
                     DropdownSelector(
-                        label = "Auth mode",
-                        value = uiSettings.authMode.name,
-                        options = AuthMode.entries.map { it.name },
+                        label = "Chế độ xác thực (Auth mode)",
+                        selectedValue = uiSettings.authMode,
+                        options = AuthMode.entries,
+                        itemLabel = { it.toDisplayLabel() },
                         onSelected = {
-                            onSettingsChange(uiSettings.copy(authMode = AuthMode.valueOf(it)))
+                            onSettingsChange(uiSettings.copy(authMode = it))
                         }
                     )
 
@@ -414,7 +435,7 @@ private fun WebhookScreen(
                             modifier = Modifier.fillMaxWidth(),
                             value = uiSettings.bearerToken,
                             onValueChange = { onSettingsChange(uiSettings.copy(bearerToken = it)) },
-                            label = { Text("Bearer token") }
+                            label = { Text("Bearer Token") }
                         )
                     }
 
@@ -424,7 +445,7 @@ private fun WebhookScreen(
                             .height(140.dp),
                         value = uiSettings.customHeadersRaw,
                         onValueChange = { onSettingsChange(uiSettings.copy(customHeadersRaw = it)) },
-                        label = { Text("Custom headers (Key: Value per line)") }
+                        label = { Text("Headers tùy chỉnh (Mỗi dòng một Header 'Key: Value')") }
                     )
 
                     OutlinedTextField(
@@ -433,7 +454,7 @@ private fun WebhookScreen(
                             .height(140.dp),
                         value = uiSettings.queryParamsRaw,
                         onValueChange = { onSettingsChange(uiSettings.copy(queryParamsRaw = it)) },
-                        label = { Text("Query params (key=value per line)") }
+                        label = { Text("Tham số truy vấn (Mỗi dòng một 'key=value')") }
                     )
 
                     OutlinedTextField(
@@ -442,14 +463,14 @@ private fun WebhookScreen(
                             .height(200.dp),
                         value = uiSettings.payloadTemplateRaw,
                         onValueChange = { onSettingsChange(uiSettings.copy(payloadTemplateRaw = it)) },
-                        label = { Text("Payload template (JSON with {title} {text} etc.)") }
+                        label = { Text("Mẫu JSON Payload (hỗ trợ {title}, {text}, {appName}, {packageName}, {postedAt}, {deviceId})") }
                     )
 
                     Button(modifier = Modifier.fillMaxWidth(), onClick = onSave) {
-                        Text("Save Webhook Settings")
+                        Text("Lưu cài đặt Webhook")
                     }
                     Button(modifier = Modifier.fillMaxWidth(), onClick = onTestWebhook) {
-                        Text("Test Webhook")
+                        Text("Gửi thử Webhook")
                     }
                 }
             }
@@ -474,14 +495,15 @@ private fun FilterScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Filter & Retry", fontWeight = FontWeight.SemiBold)
+                    Text("Bộ lọc & Thử lại", fontWeight = FontWeight.SemiBold)
 
                     DropdownSelector(
-                        label = "Filter mode",
-                        value = uiSettings.filterMode.name,
-                        options = FilterMode.entries.map { it.name },
+                        label = "Chế độ lọc",
+                        selectedValue = uiSettings.filterMode,
+                        options = FilterMode.entries,
+                        itemLabel = { it.toDisplayLabel() },
                         onSelected = {
-                            onSettingsChange(uiSettings.copy(filterMode = FilterMode.valueOf(it)))
+                            onSettingsChange(uiSettings.copy(filterMode = it))
                         }
                     )
 
@@ -491,7 +513,7 @@ private fun FilterScreen(
                             .height(120.dp),
                         value = uiSettings.filterPackagesRaw,
                         onValueChange = { onSettingsChange(uiSettings.copy(filterPackagesRaw = it)) },
-                        label = { Text("Packages list (comma/newline)") }
+                        label = { Text("Danh sách Package Name (phân cách bằng dấu phẩy hoặc dòng mới)") }
                     )
 
                     OutlinedTextField(
@@ -500,7 +522,7 @@ private fun FilterScreen(
                         onValueChange = {
                             onSettingsChange(uiSettings.copy(maxRetriesRaw = it.filter { c -> c.isDigit() }))
                         },
-                        label = { Text("Max retries") },
+                        label = { Text("Số lần thử lại tối đa") },
                         singleLine = true
                     )
 
@@ -510,12 +532,12 @@ private fun FilterScreen(
                         onValueChange = {
                             onSettingsChange(uiSettings.copy(batchSizeRaw = it.filter { c -> c.isDigit() }))
                         },
-                        label = { Text("Batch size") },
+                        label = { Text("Số lượng gửi mỗi đợt (Batch size)") },
                         singleLine = true
                     )
 
                     Button(modifier = Modifier.fillMaxWidth(), onClick = onSave) {
-                        Text("Save Filter & Retry")
+                        Text("Lưu cài đặt bộ lọc & thử lại")
                     }
                 }
             }
@@ -540,13 +562,13 @@ private fun QueueScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Recent Queue", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Danh sách hàng đợi gần đây", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onClearQueue,
                         enabled = recent.isNotEmpty()
                     ) {
-                        Text("Clear All Queue")
+                        Text("Xóa toàn bộ hàng đợi")
                     }
                 }
             }
@@ -561,21 +583,21 @@ private fun QueueScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(item.appName, fontWeight = FontWeight.SemiBold)
+                        Text(item.appName.ifBlank { item.packageName }, fontWeight = FontWeight.SemiBold)
                         QueueStatusBadge(status = item.status)
                     }
-                    Text(item.title.ifBlank { "(no title)" })
-                    Text(item.text.ifBlank { "(no text)" })
-                    Text(item.packageName)
-                    Text("Attempt: ${item.attemptCount}")
+                    Text(item.title.ifBlank { "(không có tiêu đề)" })
+                    Text(item.text.ifBlank { "(không có nội dung)" })
+                    Text("Gói: ${item.packageName}")
+                    Text("Số lần thử: ${item.attemptCount}")
                     if (!item.lastError.isNullOrBlank()) {
-                        Text("Err: ${item.lastError}")
+                        Text("Lỗi: ${item.lastError}")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { onDeleteItem(item.id) }
                     ) {
-                        Text("Delete This Queue")
+                        Text("Xóa mục này")
                     }
                 }
             }
@@ -586,16 +608,17 @@ private fun QueueScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DropdownSelector(
+private fun <T> DropdownSelector(
     label: String,
-    value: String,
-    options: List<String>,
-    onSelected: (String) -> Unit
+    selectedValue: T,
+    options: List<T>,
+    itemLabel: (T) -> String = { it.toString() },
+    onSelected: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = value,
+            value = itemLabel(selectedValue),
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -607,7 +630,7 @@ private fun DropdownSelector(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option) },
+                    text = { Text(itemLabel(option)) },
                     onClick = {
                         onSelected(option)
                         expanded = false
@@ -641,7 +664,7 @@ private fun QueueStatusBadge(status: QueueStatus) {
     }
     Surface(color = container, contentColor = content, shape = RoundedCornerShape(999.dp)) {
         Text(
-            text = status.name,
+            text = status.toDisplayLabel(),
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelMedium
         )
