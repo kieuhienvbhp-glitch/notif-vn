@@ -1,137 +1,35 @@
-# Notification Forwarder (Android)
+# AutoBankPay Pro (Ứng dụng Android)
 
-Android app to listen for incoming notifications and forward them to a configurable webhook API.
+Ứng dụng đọc thông báo (Notification Listener) trên Android, chuyên dùng để bắt biến động số dư từ các ứng dụng Ngân hàng / Ví điện tử và tự động gửi dữ liệu về Website của bạn (WooCommerce) qua Webhook để duyệt đơn hàng.
 
-## Features
+## Tính năng chính
 
-- Notification capture using `NotificationListenerService`
-- Webhook forwarding with configurable URL, HTTP method, auth mode, custom headers, query params, and payload template
-- Compatible with Telegram Bot API, Discord webhooks, and any custom API
-- Queue system with Room (durable local storage)
-- Retry system with WorkManager (network constraints + backoff)
-- Background support
-- Auto queue scheduling after reboot (`BOOT_COMPLETED`)
+- **Bắt thông báo siêu tốc:** Sử dụng `NotificationListenerService` chạy ngầm, không bỏ sót bất kỳ thông báo nhận tiền nào.
+- **Lọc ứng dụng thông minh:** Cho phép chọn chính xác ứng dụng Ngân hàng (MB Bank, Vietcombank, Momo, v.v.) để đọc thông báo, bỏ qua các thông báo rác.
+- **Tích hợp Webhook mạnh mẽ:** Hỗ trợ đẩy dữ liệu qua API (POST) về website WordPress/WooCommerce để tự động duyệt đơn hàng.
+- **Quản lý hàng đợi (Queue):** Không sợ mất dữ liệu khi mất mạng. Ứng dụng tự động lưu lại lịch sử và gửi bù lại khi có mạng (công nghệ Room và WorkManager).
+- **Tự khởi động:** Khôi phục trạng thái hoạt động chạy ngầm ngay sau khi bạn khởi động lại điện thoại.
+- **Giao diện 100% Tiếng Việt:** Dễ hiểu, dễ cài đặt cho người Việt.
 
-## Background Reliability Setup
+## Hướng dẫn cài đặt (Rất Quan trọng)
 
-1. Open app -> **Home**.
-2. Tap **Open Access Settings** and enable Notification Access.
-3. Tap **Open Battery Settings** and set app to no restriction if available.
-4. On some OEM ROMs (MIUI/ColorOS/Funtouch), enable Auto Start for the app.
+Để ứng dụng không bị hệ điều hành tự động tắt ngầm, vui lòng làm theo các bước sau:
 
-## Build
+1. Mở ứng dụng, tại trang chủ.
+2. Bấm nút **Cấp quyền xem thông báo**: Tìm ứng dụng `AutoBankPay Pro` và bật công tắc cho phép.
+3. Bấm nút **Cấp quyền chạy ngầm (Pin)**: Cấp quyền không hạn chế chạy ngầm (Unrestricted / No restriction).
+4. *(Đặc biệt trên Xiaomi, Oppo, Vivo)*: Vào cài đặt ứng dụng của máy, bật quyền **Tự động khởi chạy (Auto Start)** và khóa ứng dụng trong trình đa nhiệm (chức năng ổ khóa).
 
-```bash
-./gradlew assembleDebug
-```
+## Kết nối với Website (WordPress/WooCommerce)
 
-## Webhook Configuration
+Tải và cài đặt plugin `auto-bank-pay-pro.zip` lên website của bạn.
 
-### Supported HTTP Methods
-- `GET` — no request body, query params appended to URL
-- `POST` — with JSON body
-- `PUT` — with JSON body
-- `PATCH` — with JSON body
+Trên điện thoại, cấu hình Webhook như sau:
+- **URL Webhook:** `https://ten-website-cua-ban.com/wp-json/autobank/v1/webhook`
+- **Phương thức HTTP:** `POST`
+- **Xác thực:** Chọn Bearer Token và nhập Token khớp với cài đặt trong Plugin WordPress.
 
-### Authentication
-- **None** — no auth header
-- **Bearer** — adds `Authorization: Bearer <token>`
-- **Custom** — define any headers manually
+## Giấy phép
 
-### Custom Query Params
-Add per line as `key=value`:
-```
-chat_id=123456789
-token=abc123
-```
-
-### Custom Payload Template
-Use JSON with variable placeholders. Leave blank for default payload.
-
-Available variables:
-- `{deviceId}`
-- `{packageName}`
-- `{appName}`
-- `{title}`
-- `{text}`
-- `{postedAt}`
-- `{notificationKey}`
-
-#### Example: Telegram Bot API
-- URL: `https://api.telegram.org/bot<token>/sendMessage`
-- Method: `POST`
-- Payload template:
-```json
-{"chat_id":"123456789","text":"*{appName}*\n*{title}*\n{text}","parse_mode":"Markdown"}
-```
-
-#### Example: Discord Webhook
-- URL: `https://discord.com/api/webhooks/.../...`
-- Method: `POST`
-- Payload template:
-```json
-{"content":"**{appName}**\n**{title}**\n{text}"}
-```
-
-#### Example: Custom GET API
-- URL: `https://example.com/api/alert`
-- Method: `GET`
-- Query params:
-```
-device={deviceId}
-msg={title}
-```
-
-## Local Webhook API (`webhook/`)
-
-This repository includes a Node.js webhook receiver in `webhook/` for local testing.
-
-### Setup
-
-```bash
-cd webhook
-npm install
-cp .env.example .env
-```
-
-### Run
-
-```bash
-npm run start
-```
-
-Default endpoint:
-
-- `POST /webhook`
-
-Health check:
-
-- `GET /health`
-
-Environment config (`webhook/.env`):
-
-| Key | Description |
-|-----|-------------|
-| `HOST` | Server host |
-| `PORT` | Server port |
-| `WEBHOOK_PATH` | Webhook endpoint path |
-| `WEBHOOK_BEARER_TOKEN` | Optional bearer token |
-| `WEBHOOK_LOG_FILE` | Log file path |
-| `JSON_LIMIT` | Max JSON body size |
-
-## Screenshots
-
-### Home & Webhook Page
-
-<img src="screenshots/home.jpg" alt="Home" width="240" />
-<img src="screenshots/webhook.jpg" alt="Webhook" width="240" />
-
-### Filter & Queue Page
-
-<img src="screenshots/filter.jpg" alt="Filter" width="240" />
-<img src="screenshots/queue.jpg" alt="Queue" width="240" />
-
-## License
-
-This project is licensed under the MIT License.
-See [LICENSE](LICENSE) for details.
+Dự án này được phát hành dưới Giấy phép MIT.
+Xem tệp [LICENSE](LICENSE) để biết chi tiết.
