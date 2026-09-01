@@ -106,9 +106,9 @@ private enum class AppTab(val label: String, val icon: ImageVector) {
 }
 
 private fun FilterMode.toDisplayLabel(): String = when (this) {
-    FilterMode.ALL_APPS -> "Tất cả ứng dụng (ALL_APPS)"
-    FilterMode.WHITELIST -> "Danh sách cho phép (WHITELIST)"
-    FilterMode.BLACKLIST -> "Danh sách chặn (BLACKLIST)"
+    FilterMode.ALL_APPS -> "Tất cả ứng dụng"
+    FilterMode.WHITELIST -> "Danh sách cho phép"
+    FilterMode.BLACKLIST -> "Danh sách chặn"
 }
 
 private fun AuthMode.toDisplayLabel(): String = when (this) {
