@@ -31,43 +31,12 @@ jobs:
       - name: Clean build
         run: ./gradlew clean
 
-      - name: Generate signing keystore
-        run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "Using provided keystore secret..."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/release.jks"
-            echo "STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_ALIAS_VAL=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD_VAL=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-          else
-            echo "No keystore secret. Auto-generating a release signing key..."
-            keytool -genkeypair -v \
-              -keystore "${{ github.workspace }}/release.jks" \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -alias autobankpay \
-              -storepass AutoBankPay2026 \
-              -keypass AutoBankPay2026 \
-              -dname "CN=AutoBankPay Pro, OU=Mobile, O=MePetVN, L=Hanoi, ST=Hanoi, C=VN"
-            echo "STORE_PASSWORD=AutoBankPay2026" >> $GITHUB_ENV
-            echo "KEY_ALIAS_VAL=autobankpay" >> $GITHUB_ENV
-            echo "KEY_PASSWORD_VAL=AutoBankPay2026" >> $GITHUB_ENV
-          fi
-
-      - name: Build signed Release APK
-        run: |
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="${{ github.workspace }}/release.jks" \
-            -Pandroid.injected.signing.store.password="${{ env.STORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ env.KEY_ALIAS_VAL }}" \
-            -Pandroid.injected.signing.key.password="${{ env.KEY_PASSWORD_VAL }}"
-
-      - name: Cleanup keystore
-        if: always()
-        run: rm -f "${{ github.workspace }}/release.jks"
+      - name: Build unsigned APK (Debug)
+        run: ./gradlew assembleDebug
 
       - name: Prepare APK Artifact
         run: |
-          APK_SRC="app/build/outputs/apk/release/app-release.apk"
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${{ github.ref_name }}"
           else

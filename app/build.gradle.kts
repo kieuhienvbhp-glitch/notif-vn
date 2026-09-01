@@ -12,7 +12,7 @@ android {
         applicationId = "com.itsazni.notificationforwarder"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
+        versionCode = 212
         versionName = "2.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

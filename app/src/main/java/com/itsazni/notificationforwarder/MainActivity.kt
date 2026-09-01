@@ -248,7 +248,6 @@ private fun MainScreen(settingsStore: SettingsStore) {
                                     scope.launch {
                                         snackbarHostState.showSnackbar("Đã quét và nạp cấu hình Webhook thành công!")
                                     }
-                                    showTestDialog = true
                                 } catch (_: Exception) {
                                     if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
                                         val updated = uiSettings.copy(webhookUrl = rawValue, forwardingEnabled = true)
@@ -258,7 +257,6 @@ private fun MainScreen(settingsStore: SettingsStore) {
                                         scope.launch {
                                             snackbarHostState.showSnackbar("Đã lưu URL Webhook từ mã QR!")
                                         }
-                                        showTestDialog = true
                                     } else {
                                         scope.launch {
                                             snackbarHostState.showSnackbar("Mã QR không đúng định dạng Webhook")
@@ -396,11 +394,28 @@ private fun HomeScreen(modifier: Modifier, stats: QueueStats) {
                             success = enabled
                         )
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Tối ưu hóa pin")
+                        val unrestricted = isBatteryUnrestricted(context)
+                        StatusBadge(
+                            text = if (unrestricted) "Không hạn chế" else "Bị hạn chế",
+                            success = unrestricted
+                        )
+                    }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { openNotificationSettings(context) }
                     ) {
                         Text("Cấp quyền xem thông báo")
+                    }
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { openBatterySettings(context) }
+                    ) {
+                        Text("Cấp quyền chạy ngầm")
                     }
                     Button(
                         modifier = Modifier.fillMaxWidth(),
@@ -1158,3 +1173,21 @@ private fun openNotificationSettings(context: Context) {
     }
 }
 
+private fun openBatterySettings(context: Context) {
+    val primaryIntent = Intent(
+        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+        Uri.parse("package:${context.packageName}")
+    )
+    val fallbackIntent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null)
+    )
+
+    runCatching { context.startActivity(primaryIntent) }
+        .onFailure { context.startActivity(fallbackIntent) }
+}
+
+private fun isBatteryUnrestricted(context: Context): Boolean {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return pm.isIgnoringBatteryOptimizations(context.packageName)
+}
