@@ -1162,7 +1162,10 @@ private fun buildHeadersPreview(
 }
 
 private fun openBatterySettings(context: Context) {
-    val primaryIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    val primaryIntent = Intent(
+        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+        Uri.parse("package:${context.packageName}")
+    )
     val fallbackIntent = Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", context.packageName, null)
