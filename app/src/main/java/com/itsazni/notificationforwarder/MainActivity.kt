@@ -20,13 +20,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,12 +46,14 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +63,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -162,6 +169,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
 
     var selectedTab by remember { mutableStateOf(AppTab.HOME) }
     var uiSettings by remember { mutableStateOf(settingsStore.readAll().toUiSettings()) }
+    var showTestDialog by remember { mutableStateOf(false) }
 
     val stats by repository.observeStats().collectAsState(
         initial = QueueStats(0, 0, 0, 0)
@@ -230,6 +238,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                                     scope.launch {
                                         snackbarHostState.showSnackbar("Đã quét và nạp cấu hình Webhook thành công!")
                                     }
+                                    showTestDialog = true
                                 } catch (_: Exception) {
                                     if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
                                         val updated = uiSettings.copy(webhookUrl = rawValue, forwardingEnabled = true)
@@ -239,6 +248,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                                         scope.launch {
                                             snackbarHostState.showSnackbar("Đã lưu URL Webhook từ mã QR!")
                                         }
+                                        showTestDialog = true
                                     } else {
                                         scope.launch {
                                             snackbarHostState.showSnackbar("Mã QR không đúng định dạng Webhook")
@@ -270,33 +280,7 @@ private fun MainScreen(settingsStore: SettingsStore) {
                         scope.launch { snackbarHostState.showSnackbar("Đã lưu cài đặt Webhook") }
                     },
                     onTestWebhook = {
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) {
-                                WebhookClient().send(
-                                    url = uiSettings.webhookUrl,
-                                    method = uiSettings.webhookMethod,
-                                    headers = buildHeadersPreview(
-                                        authMode = uiSettings.authMode,
-                                        token = uiSettings.bearerToken,
-                                        customHeadersRaw = uiSettings.customHeadersRaw
-                                    ),
-                                    queryParams = parseKeyValuePairs(uiSettings.queryParamsRaw),
-                                    payloadTemplate = uiSettings.payloadTemplateRaw,
-                                    item = QueueItem(
-                                        packageName = "com.test.package",
-                                        appName = "Thử nghiệm Webhook",
-                                        title = "Thông báo thử nghiệm",
-                                        text = "Đây là nội dung thử nghiệm gửi webhook",
-                                        postedAt = System.currentTimeMillis(),
-                                        notificationKey = "test-${System.currentTimeMillis()}"
-                                    ),
-                                    deviceId = "test-device"
-                                )
-                            }
-                            snackbarHostState.showSnackbar(
-                                if (result.success) "Gửi thử Webhook thành công!" else "Gửi thử Webhook thất bại: ${result.message}"
-                            )
-                        }
+                        showTestDialog = true
                     },
                     onScanQrCode = onScanQrCode
                 )
@@ -333,6 +317,43 @@ private fun MainScreen(settingsStore: SettingsStore) {
                 }
             )
         }
+    }
+
+    if (showTestDialog) {
+        TestBankWebhookDialog(
+            uiSettings = uiSettings,
+            onDismiss = { showTestDialog = false },
+            onSendTest = { appName, pkg, title, text ->
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        WebhookClient().send(
+                            url = uiSettings.webhookUrl,
+                            method = uiSettings.webhookMethod,
+                            headers = buildHeadersPreview(
+                                authMode = uiSettings.authMode,
+                                token = uiSettings.bearerToken,
+                                customHeadersRaw = uiSettings.customHeadersRaw
+                            ),
+                            queryParams = parseKeyValuePairs(uiSettings.queryParamsRaw),
+                            payloadTemplate = uiSettings.payloadTemplateRaw,
+                            item = QueueItem(
+                                packageName = pkg,
+                                appName = appName,
+                                title = title,
+                                text = text,
+                                postedAt = System.currentTimeMillis(),
+                                notificationKey = "test-${System.currentTimeMillis()}"
+                            ),
+                            deviceId = "test-device"
+                        )
+                    }
+                    snackbarHostState.showSnackbar(
+                        if (result.success) "✅ Gửi thử thành công! Phản hồi: ${result.message}"
+                        else "⚠️ Gửi thử thất bại: ${result.message}"
+                    )
+                }
+            }
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -553,13 +574,125 @@ private fun WebhookScreen(
                     Button(modifier = Modifier.fillMaxWidth(), onClick = onSave) {
                         Text("Lưu cài đặt Webhook")
                     }
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = onTestWebhook) {
-                        Text("Gửi thử Webhook")
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onTestWebhook,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Send, contentDescription = "Gửi thử")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("🧪 Thử nghiệm gửi Webhook (Mô phỏng Ngân hàng)")
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TestBankWebhookDialog(
+    uiSettings: UiSettings,
+    onDismiss: () -> Unit,
+    onSendTest: (appName: String, pkg: String, title: String, text: String) -> Unit
+) {
+    var selectedBank by remember { mutableStateOf("MB Bank") }
+    var testAmount by remember { mutableStateOf("50000") }
+    var testOrderId by remember { mutableStateOf("123") }
+
+    val bankList = listOf(
+        "MB Bank" to "com.mbmobile",
+        "Vietcombank" to "com.VCB",
+        "Techcombank" to "vn.com.techcombank.bb.app",
+        "ACB" to "mobile.acb.com.vn",
+        "MoMo" to "com.mservice.momopay"
+    )
+
+    val previewText = when (selectedBank) {
+        "MB Bank" -> "TK 123456789 | GD: +${testAmount}VND | SD: 10,000,000VND | ND: MEPET ${testOrderId} chuyen tien"
+        "Vietcombank" -> "SD TK 0123456789 +${testAmount}VND vao 12:00. Ref VCB.1234. ND: DH ${testOrderId}"
+        "Techcombank" -> "Giao dịch thành công +${testAmount} VND tai Techcombank. Noi dung: MEPET ${testOrderId}"
+        "ACB" -> "ACB: +${testAmount} VND vao TK ... ND: DONHANG ${testOrderId}"
+        "MoMo" -> "Bạn vừa nhận được ${testAmount}đ từ Khach Hang. Lời nhắn: #${testOrderId}"
+        else -> "+${testAmount}VND ND: MEPET ${testOrderId}"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🧪 Thử Nghiệm Gửi Webhook", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    "Giả lập thông báo nhận tiền gửi tới website để kiểm tra đơn hàng tự kích hoạt:",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Text("Chọn Ngân hàng giả lập:", fontWeight = FontWeight.SemiBold)
+                bankList.forEach { (name, _) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = (selectedBank == name),
+                                onClick = { selectedBank = name }
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedBank == name),
+                            onClick = { selectedBank = name }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(name)
+                    }
+                }
+
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = testAmount,
+                    onValueChange = { testAmount = it },
+                    label = { Text("Số tiền giả lập (VNĐ)") },
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = testOrderId,
+                    onValueChange = { testOrderId = it },
+                    label = { Text("Mã đơn hàng test (vd: 123)") },
+                    singleLine = true
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Nội dung gửi thử tới Web:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        Text(previewText, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val pkg = bankList.find { it.first == selectedBank }?.second ?: "com.mbmobile"
+                onSendTest(selectedBank, pkg, "Biến động số dư $selectedBank", previewText)
+                onDismiss()
+            }) {
+                Text("🚀 Bắn Test Tới Web")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Đóng")
+            }
+        }
+    )
 }
 
 @Composable
