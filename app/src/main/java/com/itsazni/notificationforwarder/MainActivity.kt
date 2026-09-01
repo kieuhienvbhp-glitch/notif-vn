@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,8 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -70,6 +73,10 @@ import com.itsazni.notificationforwarder.settings.FilterMode
 import com.itsazni.notificationforwarder.settings.SettingsStore
 import com.itsazni.notificationforwarder.ui.theme.AppTheme
 import com.itsazni.notificationforwarder.worker.WorkerScheduler
+import com.google.gson.JsonParser
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -188,47 +195,112 @@ private fun MainScreen(settingsStore: SettingsStore) {
                 stats = stats
             )
 
-            AppTab.WEBHOOK -> WebhookScreen(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                uiSettings = uiSettings,
-                onSettingsChange = { uiSettings = it },
-                onSave = {
-                    saveSettings(settingsStore, uiSettings)
-                    WorkerScheduler.enqueueImmediate(context)
-                    scope.launch { snackbarHostState.showSnackbar("Đã lưu cài đặt Webhook") }
-                },
-                onTestWebhook = {
-                    scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            WebhookClient().send(
-                                url = uiSettings.webhookUrl,
-                                method = uiSettings.webhookMethod,
-                                headers = buildHeadersPreview(
-                                    authMode = uiSettings.authMode,
-                                    token = uiSettings.bearerToken,
-                                    customHeadersRaw = uiSettings.customHeadersRaw
-                                ),
-                                queryParams = parseKeyValuePairs(uiSettings.queryParamsRaw),
-                                payloadTemplate = uiSettings.payloadTemplateRaw,
-                                item = QueueItem(
-                                    packageName = "com.test.package",
-                                    appName = "Thử nghiệm Webhook",
-                                    title = "Thông báo thử nghiệm",
-                                    text = "Đây là nội dung thử nghiệm gửi webhook",
-                                    postedAt = System.currentTimeMillis(),
-                                    notificationKey = "test-${System.currentTimeMillis()}"
-                                ),
-                                deviceId = "test-device"
-                            )
+            AppTab.WEBHOOK -> {
+                val onScanQrCode: () -> Unit = {
+                    try {
+                        val options = GmsBarcodeScannerOptions.Builder()
+                            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                            .build()
+                        val scanner = GmsBarcodeScanning.getClient(context, options)
+                        scanner.startScan()
+                            .addOnSuccessListener { barcode ->
+                                val rawValue = barcode.rawValue?.trim().orEmpty()
+                                if (rawValue.isBlank()) return@addOnSuccessListener
+                                try {
+                                    val json = JsonParser.parseString(rawValue).asJsonObject
+                                    val newUrl = json.get("webhookUrl")?.asString ?: rawValue
+                                    val newMethod = json.get("webhookMethod")?.asString ?: "POST"
+                                    val newAuthMode = when (json.get("authMode")?.asString?.uppercase()) {
+                                        "BEARER" -> AuthMode.BEARER
+                                        "CUSTOM" -> AuthMode.CUSTOM
+                                        else -> AuthMode.NONE
+                                    }
+                                    val newToken = json.get("bearerToken")?.asString ?: ""
+                                    val newEnabled = json.get("forwardingEnabled")?.asBoolean ?: true
+                                    val updated = uiSettings.copy(
+                                        webhookUrl = newUrl,
+                                        webhookMethod = newMethod,
+                                        authMode = newAuthMode,
+                                        bearerToken = newToken,
+                                        forwardingEnabled = newEnabled
+                                    )
+                                    uiSettings = updated
+                                    saveSettings(settingsStore, updated)
+                                    WorkerScheduler.enqueueImmediate(context)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Đã quét và nạp cấu hình Webhook thành công!")
+                                    }
+                                } catch (_: Exception) {
+                                    if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
+                                        val updated = uiSettings.copy(webhookUrl = rawValue, forwardingEnabled = true)
+                                        uiSettings = updated
+                                        saveSettings(settingsStore, updated)
+                                        WorkerScheduler.enqueueImmediate(context)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Đã lưu URL Webhook từ mã QR!")
+                                        }
+                                    } else {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Mã QR không đúng định dạng Webhook")
+                                        }
+                                    }
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Hủy quét hoặc lỗi: ${e.localizedMessage ?: "Đã hủy"}")
+                                }
+                            }
+                    } catch (e: Exception) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Không thể mở trình quét QR: ${e.localizedMessage}")
                         }
-                        snackbarHostState.showSnackbar(
-                            if (result.success) "Gửi thử Webhook thành công!" else "Gửi thử Webhook thất bại: ${result.message}"
-                        )
                     }
                 }
-            )
+
+                WebhookScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    uiSettings = uiSettings,
+                    onSettingsChange = { uiSettings = it },
+                    onSave = {
+                        saveSettings(settingsStore, uiSettings)
+                        WorkerScheduler.enqueueImmediate(context)
+                        scope.launch { snackbarHostState.showSnackbar("Đã lưu cài đặt Webhook") }
+                    },
+                    onTestWebhook = {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                WebhookClient().send(
+                                    url = uiSettings.webhookUrl,
+                                    method = uiSettings.webhookMethod,
+                                    headers = buildHeadersPreview(
+                                        authMode = uiSettings.authMode,
+                                        token = uiSettings.bearerToken,
+                                        customHeadersRaw = uiSettings.customHeadersRaw
+                                    ),
+                                    queryParams = parseKeyValuePairs(uiSettings.queryParamsRaw),
+                                    payloadTemplate = uiSettings.payloadTemplateRaw,
+                                    item = QueueItem(
+                                        packageName = "com.test.package",
+                                        appName = "Thử nghiệm Webhook",
+                                        title = "Thông báo thử nghiệm",
+                                        text = "Đây là nội dung thử nghiệm gửi webhook",
+                                        postedAt = System.currentTimeMillis(),
+                                        notificationKey = "test-${System.currentTimeMillis()}"
+                                    ),
+                                    deviceId = "test-device"
+                                )
+                            }
+                            snackbarHostState.showSnackbar(
+                                if (result.success) "Gửi thử Webhook thành công!" else "Gửi thử Webhook thất bại: ${result.message}"
+                            )
+                        }
+                    },
+                    onScanQrCode = onScanQrCode
+                )
+            }
 
             AppTab.FILTER -> FilterScreen(
                 modifier = Modifier
@@ -378,7 +450,8 @@ private fun WebhookScreen(
     uiSettings: UiSettings,
     onSettingsChange: (UiSettings) -> Unit,
     onSave: () -> Unit,
-    onTestWebhook: () -> Unit
+    onTestWebhook: () -> Unit,
+    onScanQrCode: () -> Unit
 ) {
     LazyColumn(
         modifier = modifier.padding(12.dp),
@@ -391,6 +464,17 @@ private fun WebhookScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Cài đặt Webhook", fontWeight = FontWeight.SemiBold)
+
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onScanQrCode,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(imageVector = Icons.Filled.QrCodeScanner, contentDescription = "Quét mã QR")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Quét mã QR cấu hình tự động")
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
