@@ -715,6 +715,7 @@ private fun loadInstalledApps(context: Context): List<InstalledApp> {
     val pm = context.packageManager
     val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
     return apps
+        .filter { it.icon != 0 } // Chỉ lấy các app có icon thực sự
         .map {
             InstalledApp(
                 packageName = it.packageName,
@@ -839,7 +840,7 @@ private fun FilterScreen(
                         onValueChange = {
                             onSettingsChange(uiSettings.copy(batchSizeRaw = it.filter { c -> c.isDigit() }))
                         },
-                        label = { Text("Số lượng gửi mỗi đợt (Batch size)") },
+                        label = { Text("Số lượng gửi mỗi đợt") },
                         singleLine = true
                     )
 
